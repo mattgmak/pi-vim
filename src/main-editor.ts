@@ -43,6 +43,13 @@ export class MainEditor extends SuiteModalEditor {
     this.transcriptSearchFn = fn;
   }
 
+  private copyModeOpenFn: (() => boolean) | undefined;
+
+  /** Normal-mode Backspace: returns true when pi-copy's copy mode opened. */
+  setCopyModeOpenFn(fn: (() => boolean) | undefined): void {
+    this.copyModeOpenFn = fn;
+  }
+
   protected override openTranscriptSearch(direction: "forward" | "backward"): boolean {
     return this.transcriptSearchFn?.(direction) === true;
   }
@@ -92,6 +99,13 @@ export class MainEditor extends SuiteModalEditor {
         this.ctrlXTimer = undefined;
         if (!this.isDisposed()) this.replayCtrlX();
       }, CTRL_X_TIMEOUT_MS);
+      return;
+    }
+    if (
+      this.getModeContext().state === "normal" &&
+      matchesKey(data, "backspace") &&
+      this.copyModeOpenFn?.()
+    ) {
       return;
     }
     if (this.getModeContext().state === "insert") {

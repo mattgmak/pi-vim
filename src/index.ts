@@ -10,6 +10,7 @@
  */
 import { createFileSharedRegister } from "./engine/shared-register.js";
 import {
+  copyToClipboard,
   CustomEditor,
   type ExtensionAPI,
   type ExtensionContext,
@@ -168,6 +169,9 @@ export default function piVim(pi: ExtensionAPI) {
         scrollToCheckpoint(options.tui, { userWords: collectUserWords(pi.events) }, direction);
       });
       editor.setClipboardMirrorPolicy(config.clipboardMirrorPolicy);
+      // The default writer resolves the host module from argv or import.meta,
+      // and the compiled Pi binary matches neither, so call the host export.
+      editor.setClipboardFn((text) => copyToClipboard(text));
       editor.setSharedRegister(createFileSharedRegister());
       editor.setQuitFn(() => ctx.shutdown());
       editor.setNotifyFn((message) => ctx.ui.notify(message, "warning"));
@@ -183,6 +187,12 @@ export default function piVim(pi: ExtensionAPI) {
       // Optional: pi-copy's copy mode answers `copy-mode:open` and searches the whole transcript.
       editor.setTranscriptSearchFn((direction) => {
         const request = { direction, handled: false };
+        pi.events.emit("copy-mode:open", request);
+        return request.handled;
+      });
+      // Normal-mode Backspace opens the same copy mode instead of deleting.
+      editor.setCopyModeOpenFn(() => {
+        const request = { handled: false };
         pi.events.emit("copy-mode:open", request);
         return request.handled;
       });

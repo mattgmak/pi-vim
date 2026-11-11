@@ -3816,14 +3816,16 @@ export class ModalEditor extends CustomEditor {
     super.handleInput(data);
   }
 
+  // handleInput routes through the keymap, and "\n" is Ctrl+J. An extension
+  // that claims Ctrl+J captures the replayed byte, so insert the text directly.
   private openLineBelow(): void {
     super.handleInput(CTRL_E);
-    super.handleInput(NEWLINE);
+    super.insertTextAtCursor(NEWLINE);
   }
 
   private openLineAbove(): void {
     super.handleInput(CTRL_A);
-    super.handleInput(NEWLINE);
+    super.insertTextAtCursor(NEWLINE);
     super.handleInput(ESC_UP);
   }
 
