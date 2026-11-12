@@ -43,8 +43,8 @@ import {
 const ESC = "\x1b";
 const CTRL_U = "\x15";
 const CTRL_D = "\x04";
-const INSERT_SHAPE = "\x1b[5 q";
-const BLOCK_SHAPE = "\x1b[1 q";
+const INSERT_SHAPE = "\x1b[6 q";
+const BLOCK_SHAPE = "\x1b[2 q";
 const RESET_SHAPE = "\x1b[0 q";
 
 type EditorFactory = (

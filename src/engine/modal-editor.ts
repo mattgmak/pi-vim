@@ -656,7 +656,9 @@ export class ModalEditor extends CustomEditor {
     kb: CustomEditorConstructorArgs[2],
     opts?: ModalEditorOptions,
   ) {
-    super(tui, theme, kb);
+    // Pi puts the working spinner in the editor border only for editors that opt
+    // in. Without this the spinner renders as its own row under the composer.
+    super(tui, theme, kb, { embedWorkingStatus: true });
     this.cursorShapeRuntime = getCursorShapeRuntime(tui);
     this.cursorShapeTui =
       typeof tui === "object" && tui !== null ? (tui as object) : null;

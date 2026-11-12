@@ -100,14 +100,14 @@ function getRawEditor(editor: ModalEditor): ModalEditorTestInternals {
   return editor as unknown as ModalEditorTestInternals;
 }
 
-const INSERT_CURSOR_SHAPE = "\x1b[5 q";
-const BLOCK_CURSOR_SHAPE = "\x1b[1 q";
+const INSERT_CURSOR_SHAPE = "\x1b[6 q";
+const BLOCK_CURSOR_SHAPE = "\x1b[2 q";
 const RESET_CURSOR_SHAPE = "\x1b[0 q";
 const SHOW_HARDWARE_CURSOR = "\x1b[?25h";
 const SOFTWARE_CURSOR_SPACE = "\x1b[7m \x1b[27m";
 /* eslint-disable no-control-regex -- DECSCUSR uses ESC. */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: DECSCUSR uses ESC.
-const DECSCUSR_PATTERN = /\x1b\[[015] q/;
+const DECSCUSR_PATTERN = /\x1b\[[0-6] q/;
 /* eslint-enable no-control-regex */
 
 function focusEditor(editor: ModalEditor): void {

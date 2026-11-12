@@ -72,8 +72,8 @@ import { captureTranscript } from "../src/transcript-viewport.js";
 const ESC = "\x1b";
 const CTRL_D = "\x04";
 const CTRL_U = "\x15";
-const INSERT_SHAPE = "\x1b[5 q";
-const BLOCK_SHAPE = "\x1b[1 q";
+const INSERT_SHAPE = "\x1b[6 q";
+const BLOCK_SHAPE = "\x1b[2 q";
 const RESET_SHAPE = "\x1b[0 q";
 const HALF_PAGE_BINDINGS: KeybindingsConfig = {
   "tui.altScreen.halfPageUp": "ctrl+u",
@@ -110,7 +110,7 @@ class MemoryTerminal implements Terminal {
     for (const key of keys) this.input(key);
   }
   cursorShapes(): string[] {
-    return this.writes.flatMap((data) => data.match(/\x1b\[[015] q/g) ?? []);
+    return this.writes.flatMap((data) => data.match(/\x1b\[[0-6] q/g) ?? []);
   }
 }
 
