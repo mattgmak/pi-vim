@@ -12,6 +12,7 @@ This repo holds one package from [justmytwospence/pi-plugins](https://github.com
 1. `src/index.ts`: the clipboard writer now calls pi's `copyToClipboard`. The default child-process helper cannot resolve its module in the compiled pi-bolt binary, so yank failed and the circuit breaker disabled mirroring.
 2. `src/engine/modal-editor.ts`: `openLineBelow` and `openLineAbove` insert the newline through `insertTextAtCursor`. The old byte replay matched pi-copy's `ctrl+j` shortcut, so `o` opened copy mode.
 3. `src/main-editor.ts` and `src/index.ts`: Normal-mode Backspace opens pi-copy's copy mode through the `copy-mode:open` event.
+4. `src/main-editor.ts`: `Ctrl+U` and `Ctrl+D` scroll the transcript in Normal mode too. The upstream gate allowed Insert mode only.
 
 ## Sync with upstream
 

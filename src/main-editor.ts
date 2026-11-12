@@ -108,7 +108,7 @@ export class MainEditor extends SuiteModalEditor {
     ) {
       return;
     }
-    if (this.getModeContext().state === "insert") {
+    if (["insert", "normal"].includes(this.getModeContext().state)) {
       const direction = matchesKey(data, "ctrl+u") ? -1 : matchesKey(data, "ctrl+d") ? 1 : 0;
       if (direction !== 0) {
         if (!isKeyRelease(data)) this.navigateViewport(direction);
