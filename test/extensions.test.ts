@@ -131,7 +131,7 @@ describe("Replace mode", () => {
   });
 });
 
-describe("surround.vim", () => {
+describe("mini.surround", () => {
   const opts = { surround: true };
 
   it("is off unless enabled: Visual S keeps Vim's line change", () => {
@@ -142,29 +142,29 @@ describe("surround.vim", () => {
 
   it("shows the keys and the tag prompt while waiting", () => {
     const editor = editorWith("foo bar", opts);
-    type(editor, "ysiwtdi");
-    assert.match(label(editor), / NORMAL ystdi_ $/);
+    type(editor, "saiwtdi");
+    assert.match(label(editor), / NORMAL satdi_ $/);
     type(editor, "v>");
     assert.equal(editor.getText(), "<div>foo</div> bar");
   });
 
   it("Escape at the replacement cancels without changing text", () => {
     const editor = editorWith("foo bar", opts);
-    type(editor, `ysiw${ESC}`);
+    type(editor, `saiw${ESC}`);
     assert.equal(editor.getText(), "foo bar");
     assert.equal(editor.getMode(), "normal");
   });
 
   it("an added surround is one undo step", () => {
     const editor = editorWith("foo bar", opts);
-    type(editor, "ysiw)u");
+    type(editor, "saiw)u");
     assert.equal(editor.getText(), "foo bar");
   });
 
   it("keeps the unnamed register", () => {
     const editor = editorWith("(foo)", opts, [0, 2]);
     editor.setRegister("keep");
-    type(editor, "ds(");
+    type(editor, "sd(");
     assert.equal(editor.getText(), "foo");
     assert.equal(editor.getRegister(), "keep");
   });
@@ -204,7 +204,7 @@ describe("display-line motion (row space)", () => {
     type(editor, "ci(X");
     sendKeys(editor, [ESC]);
     assert.equal(editor.getText(), `${"word ".repeat(30)}(X) tail`);
-    type(editor, "gg0ysiw]");
+    type(editor, "gg0saiw]");
     assert.equal(editor.getText(), `[word] ${"word ".repeat(29)}(X) tail`);
     assert.ok(!editor.getText().includes("\n"));
   });
@@ -216,12 +216,12 @@ describe("display-line motion (row space)", () => {
     assert.equal(editor.getText(), long.toUpperCase());
   });
 
-  it("ysip and >> keep the wrapped line whole", () => {
+  it("saip and >> keep the wrapped line whole", () => {
     const editor = editorWith(`${long}\nnext`, { displayLineMotion: true, surround: true });
     editor.render(40);
     type(editor, "gg>>");
     assert.equal(editor.getText(), `  ${long}\nnext`);
-    type(editor, "ggysip)");
+    type(editor, "ggsaip)");
     // surround.vim indents the pair like the first wrapped line.
     assert.equal(editor.getText(), `  (\n  ${long}\nnext\n  )`);
   });

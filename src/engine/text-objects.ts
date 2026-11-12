@@ -114,7 +114,7 @@ export function normalizeDelimiterKey(key: string): DelimiterSpec | null {
       ? "()"
       : key === "[" || key === "]"
         ? "[]"
-        : key === "{" || key === "}" || key === "B"
+        : key === "{" || key === "}"
           ? "{}"
           : null;
   return pair ? { type: "bracket", open: pair[0], close: pair[1] } : null;

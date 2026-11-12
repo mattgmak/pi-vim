@@ -1,9 +1,10 @@
 /**
- * Neovim parity for the commands pi-vim adds on top of the upstream engine:
- * stock Vim motions, objects and operators it lacked, and the targets.vim,
- * surround.vim and vim-wordmotion behaviour, checked against Neovim with
- * those plugins loaded from ~/.vim/plugins (or PI_VIM_PLUGIN_DIR). Plugin
- * cases are skipped when the plugin is not installed.
+ * Neovim parity checks for pi-vim's added commands.
+ * They cover stock Vim motions, objects and operators, targets.vim and
+ * vim-wordmotion. The plugins load from ~/.vim/plugins or PI_VIM_PLUGIN_DIR.
+ * A case is skipped when its plugin is missing. Surround has no suite here:
+ * pi-vim follows mini.surround's keys, the oracle loads only vim-surround,
+ * and test/surround.test.ts covers the keymap.
  */
 import { describe, it } from "node:test";
 import {
@@ -157,46 +158,6 @@ const TARGETS: NvimParityCase[] = [
   c(`targets ${name}`, text as string, cursor as [number, number], typed as string, { plugins: ["targets"] }),
 );
 
-const SURROUND: NvimParityCase[] = [
-  ["ysiw)", "Hello world!", [0, 7], "ysiw)"],
-  ["ysiw(", "Hello world!", [0, 7], "ysiw("],
-  ["ysw] keeps the blank outside", "foo bar", [0, 0], "ysw]"],
-  ["ys$\"", "say hi there", [0, 4], 'ys$"'],
-  ["ysiwt", "foo bar", [0, 4], "ysiwtem>"],
-  ["ysiwt with Enter", "foo bar", [0, 4], "ysiwtdiv class=\"x\"\r"],
-  ["ysiwf", "foo bar", [0, 4], "ysiwfprint\r"],
-  ["yssB", "    Hello world!", [0, 6], "yssB"],
-  ["yss)", "  abc  ", [0, 3], "yss)"],
-  ["ySS{", "  foo", [0, 2], "ySS{"],
-  ["ysip on lines", "a\nb\n\nc", [0, 0], "ysip)"],
-  ["ys2w*", "one two three", [0, 0], "ys2w*"],
-  ["ysiw) then dot", "foo bar", [0, 0], "ysiw)ww."],
-  ["ds\"", '"Hello world!"', [0, 8], 'ds"'],
-  ["ds)", "(123+456)/2", [0, 5], "ds)"],
-  ["ds( trims", "( 123 )/2", [0, 3], "ds("],
-  ["dst", "<div>Yo!</div>", [0, 7], "dst"],
-  ["ds* punctuation", "say *bold* now", [0, 6], "ds*"],
-  ["ds\" seeks forward", 'say "hi" now', [0, 0], 'ds"'],
-  ["ds( then dot", "((a))", [0, 2], "ds(."],
-  ["cs\"'", '"Hello world!"', [0, 8], "cs\"'"],
-  ["cs\"<q>", '"Hello world!"', [0, 8], 'cs"<q>'],
-  ["cs)]", "(123+456)/2", [0, 5], "cs)]"],
-  ["cs)[", "(123+456)/2", [0, 5], "cs)["],
-  ["cst<p>", "<div>Yo!</div>", [0, 7], "cst<p>"],
-  ["csrb", "a [b] c", [0, 3], "csrb"],
-  ["ds{ multi-line", "if (x) {\n  foo();\n}", [1, 3], "ds{"],
-  ["cs) then dot", "(a) (b)", [0, 1], "cs)]f(."],
-  ["vS'", "my $str = whee!;", [0, 10], "vllllS'"],
-  ["vS)", "foo bar", [0, 4], "veS)"],
-  ["VS{", "  foo\n  bar", [0, 2], "VjS{"],
-  ["VSt", "foo", [0, 0], "VStp>"],
-].map(([name, text, cursor, typed]) =>
-  c(`surround ${name}`, text as string, cursor as [number, number], typed as string, {
-    plugins: ["surround"],
-    setup: SW,
-  }),
-);
-
 const WM = "CamelCaseACRONYMWords_underscore1234 foo-bar";
 const WORDMOTION: NvimParityCase[] = [
   ["w", WM, [0, 0], "w"],
@@ -234,5 +195,4 @@ function suite(title: string, cases: NvimParityCase[]): void {
 
 suite("nvim parity: stock commands added to pi-vim", STOCK);
 suite("nvim parity: targets.vim", TARGETS);
-suite("nvim parity: surround.vim", SURROUND);
 suite("nvim parity: vim-wordmotion", WORDMOTION);

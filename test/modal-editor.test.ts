@@ -5570,7 +5570,7 @@ describe("bracket text objects", () => {
     }
   });
 
-  it("supports closing delimiter aliases and b/B aliases", () => {
+  it("supports closing delimiter aliases and the b alias", () => {
     const scenarios = [
       {
         name: ") alias",
@@ -5598,13 +5598,6 @@ describe("bracket text objects", () => {
         initial: "obj{foo}",
         cursorCol: 5,
         keys: ["d", "i", "}"],
-        expectedText: "obj{}",
-      },
-      {
-        name: "B alias",
-        initial: "obj{foo}",
-        cursorCol: 5,
-        keys: ["d", "i", "B"],
         expectedText: "obj{}",
       },
     ];

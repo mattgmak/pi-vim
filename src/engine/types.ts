@@ -7,8 +7,9 @@ export type CharMotion = "f" | "F" | "t" | "T";
 export type PendingMotion = CharMotion | null;
 /**
  * Operators beyond d/c/y, named by the keys that start them: case changes,
- * shifts, surround.vim's `ys`/`yS`, and operators pi-vim accepts but leaves
- * the text alone for (formatting, filters, folds) so their motion is consumed.
+ * shifts, mini.surround's `sa` (plus the `ys`/`yS` shape it replays), and
+ * operators pi-vim accepts but leaves the text alone for (formatting, filters,
+ * folds) so their motion is consumed.
  */
 export type GenericOperator =
   | "gu"
@@ -19,6 +20,7 @@ export type GenericOperator =
   | "<"
   | "ys"
   | "yS"
+  | "sa"
   | "gq"
   | "gw"
   | "g@"

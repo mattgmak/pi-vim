@@ -387,6 +387,42 @@ export function currentLine(buf: VimBuffer, from: Pos, include: boolean): OpSpan
   };
 }
 
+/**
+ * mini.ai's `N` (`gen_ai_spec.Number`): the number at or after the cursor.
+ * `iN` and `aN` give the same range, as in mini.ai's generated specs.
+ */
+export function currentNumber(buf: VimBuffer, from: Pos, count: number): OpSpan | null {
+  const pattern = /0[xX][\da-fA-F]+|0[oO][0-7]+|0[bB][01]+|\d+(?:\.\d+)?/g;
+  const spans: Array<{ start: number; end: number }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(buf.text)) !== null) {
+    spans.push({ start: match.index, end: match.index + match[0].length - 1 });
+  }
+  const cursorAbs = buf.abs(from);
+  const first = spans.findIndex((span) => span.end >= cursorAbs);
+  if (first < 0) return null;
+  const n = Number.isFinite(count) && count > 1 ? Math.floor(count) : 1;
+  const target = spans[first + n - 1];
+  return target
+    ? {
+        start: buf.fromAbs(target.start),
+        end: buf.fromAbs(target.end),
+        inclusive: true,
+        linewise: false,
+      }
+    : null;
+}
+
+/** mini.ai's `B` (`gen_ai_spec.File`): every line of the buffer. */
+export function currentBuffer(buf: VimBuffer): OpSpan | null {
+  if (buf.lineCount < 1) return null;
+  return {
+    start: { line: 0, col: 0 },
+    end: { line: buf.lineCount - 1, col: 0 },
+    inclusive: false,
+    linewise: true,
+  };
+}
 /** Neovim `startPS()` without nroff macros: an empty line or a form feed starts a paragraph. */
 export function startPS(buf: VimBuffer, line: number): boolean {
   const s = buf.lines[line] ?? "";

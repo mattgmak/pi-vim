@@ -131,7 +131,9 @@ import {
   bckWord,
   BACKWARD,
   currentBlock,
+  currentBuffer,
   currentLine,
+  currentNumber,
   currentParagraph,
   currentQuote,
   currentSentence,
@@ -205,6 +207,7 @@ const GENERIC_OPERATORS = new Set<string>([
   "<",
   "ys",
   "yS",
+  "sa",
   "gq",
   "gw",
   "g@",
@@ -222,6 +225,7 @@ const OPERATOR_LINE_KEY: Record<GenericOperator, string> = {
   "<": "<",
   ys: "s",
   yS: "S",
+  sa: "l",
   gq: "q",
   gw: "w",
   "g@": "@",
@@ -246,7 +250,6 @@ const BRACKET_OBJECT_PAIRS: Record<string, [string, string]> = {
   b: ["(", ")"],
   "{": ["{", "}"],
   "}": ["{", "}"],
-  B: ["{", "}"],
   "[": ["[", "]"],
   "]": ["[", "]"],
   "<": ["<", ">"],
@@ -546,6 +549,8 @@ export class ModalEditor extends CustomEditor {
   private blackHoleRegister: boolean = false;
   private blackHoleArmedThisKey: boolean = false;
   private pendingSurround: PendingSurround | null = null;
+  /** `s` typed in Normal or Visual mode, waiting for the mini.surround sub-key. */
+  private pendingS: boolean = false;
   /** Replace mode (`R`): the characters each typed key overwrote. */
   private replaceSession: { originals: (string | null)[] } | null = null;
   private lastVisual: { mode: VisualMode; anchor: VisualPosition; cursor: VisualPosition } | null = null;
@@ -773,6 +778,7 @@ export class ModalEditor extends CustomEditor {
     let keys = this.pendingRegister ? '"' : "";
     keys += this.prefixCount;
     if (this.pendingBracket) keys += this.pendingBracket;
+    if (this.pendingS) keys += "s";
     if (this.pendingOperator) keys += this.pendingOperator + this.operatorCount;
     if (this.pendingOpG) keys += "g";
     if (this.pendingG) keys += `g${this.pendingGCount}`;
@@ -1767,6 +1773,7 @@ export class ModalEditor extends CustomEditor {
     this.pendingTextObjectWhich = null;
     this.pendingSwallow = null;
     this.pendingBracket = null;
+    this.pendingS = false;
     this.pendingRegister = false;
     this.blackHoleRegister = false;
     this.pendingSurround = null;
@@ -2340,6 +2347,11 @@ export class ModalEditor extends CustomEditor {
         return;
       }
 
+      if (this.pendingS) {
+        this.resolveSurroundPrefix(data);
+        return;
+      }
+
       if (this.pendingSurround) {
         this.handlePendingSurround(data);
         return;
@@ -2519,6 +2531,7 @@ export class ModalEditor extends CustomEditor {
       this.pendingSwallow ||
       this.pendingRegister ||
       this.blackHoleRegister ||
+      this.pendingS ||
       this.pendingSurround
     ) {
       this.clearPendingState();
@@ -3472,6 +3485,10 @@ export class ModalEditor extends CustomEditor {
         return true;
       case "c":
       case "s":
+        if (data === "s" && this.surround) {
+          this.pendingS = true;
+          return true;
+        }
         this.applyVisualOperator("c", linewise);
         return true;
       case "D":
@@ -3485,8 +3502,7 @@ export class ModalEditor extends CustomEditor {
         this.applyVisualOperator("c", true);
         return true;
       case "S":
-        if (this.surround) this.startVisualSurround();
-        else this.applyVisualOperator("c", true);
+        this.applyVisualOperator("c", true);
         return true;
       case "p":
       case "P":
@@ -3994,10 +4010,8 @@ export class ModalEditor extends CustomEditor {
         });
         break;
       case "s":
-        this.runAsOperator("change", () => {
-          this.cutCharUnderCursor();
-          this.setMode();
-        });
+        if (this.surround) this.pendingS = true;
+        else this.substituteChar();
         break;
       case "x":
         this.cutCharUnderCursor(true);
@@ -5840,24 +5854,6 @@ export class ModalEditor extends CustomEditor {
       this.pendingTextObject = data;
       return true;
     }
-    if (this.surround && this.operatorCount === "") {
-      if ((op === "d" || op === "c") && data === "s") {
-        const count = this.takeTotalCount(1);
-        this.pendingOperator = null;
-        this.pendingSurround = {
-          kind: op === "d" ? "delete" : "change",
-          stage: "target",
-          count,
-          keys: `${op}s`,
-          input: "",
-        };
-        return true;
-      }
-      if (op === "y" && (data === "s" || data === "S")) {
-        this.pendingOperator = data === "s" ? "ys" : "yS";
-        return true;
-      }
-    }
     const extraMotion =
       data === "(" ||
       data === ")" ||
@@ -5975,15 +5971,15 @@ export class ModalEditor extends CustomEditor {
     const count = this.takeTotalCount(1);
     const cursor = this.cursorPos();
     const lastLine = this.getLines().length - 1;
-    if (op === "ys") {
-      // `yss`: from the first non-blank through the last non-blank character.
+    if (op === "ys" || op === "sa") {
+      // `yss` and mini.surround's `al`: first non-blank through last non-blank.
       const span = surroundLineSpan(this.getText(), cursor.line, count);
       this.pendingOperator = null;
       if (!span) {
         this.cancelRepeatableCommand();
         return;
       }
-      this.startSurroundAdd(span, false, false, "yss");
+      this.startSurroundAdd(span, false, false, op === "ys" ? "yss" : "sal");
       return;
     }
     const endLine = Math.min(lastLine, cursor.line + count - 1);
@@ -6220,6 +6216,10 @@ export class ModalEditor extends CustomEditor {
         }
         case "l":
           return currentLine(buf, cursor, include);
+        case "N":
+          return currentNumber(buf, cursor, count);
+        case "B":
+          return currentBuffer(buf);
       }
     }
     if (this.targets && isTargetsTrigger(key)) {
@@ -6349,6 +6349,7 @@ export class ModalEditor extends CustomEditor {
       case "<":
         this.shiftLines(startLine, endLine, op === ">" ? 1 : -1, 1, oldCol);
         return;
+      case "sa":
       case "ys":
       case "yS":
         this.startSurroundAdd({ startAbs, endAbs, linewise, startLine, endLine }, false, op === "yS", op);
@@ -6655,14 +6656,52 @@ export class ModalEditor extends CustomEditor {
     };
   }
 
-  private startVisualSurround(): void {
+  /** `s` on its own: delete the character under the cursor and enter Insert. */
+  private substituteChar(): void {
+    this.runAsOperator("change", () => {
+      this.cutCharUnderCursor();
+      this.setMode();
+    });
+  }
+
+  // The key after `s`: mini.surround's `sa`, `sd` and `sr`, or the `s` command
+  // the chord collapses into when the key names no surround action.
+  private resolveSurroundPrefix(data: string): void {
+    this.pendingS = false;
+    const visual = isVisualMode(this.mode);
+    if (data === "a") {
+      if (visual) this.startVisualSurround("sa");
+      else this.pendingOperator = "sa";
+      return;
+    }
+    if (!visual && this.operatorCount === "" && (data === "d" || data === "r")) {
+      this.pendingSurround = {
+        kind: data === "d" ? "delete" : "change",
+        stage: "target",
+        count: this.takeTotalCount(1),
+        keys: `s${data}`,
+        input: "",
+      };
+      return;
+    }
+    if (visual || !isPrintableChunk(data)) {
+      this.cancelRepeatableCommand();
+      return;
+    }
+    // Vim resolves an unmapped `s…` chord by running `s` and taking the next
+    // key as Insert-mode input; do the same without waiting for a timeout.
+    this.substituteChar();
+    this.baseEdit(data);
+  }
+
+  private startVisualSurround(keys: string): void {
     this.takeTotalCount(1);
     this.beginVisualChange();
     const range = this.visualRange();
     this.visualAnchor = null;
     this.setMode("normal");
     this.moveCursorToAbsoluteIndex(range.startAbs);
-    this.startSurroundAdd(range, true, range.linewise, "S");
+    this.startSurroundAdd(range, true, range.linewise, keys);
   }
 
   private handlePendingSurround(data: string): void {

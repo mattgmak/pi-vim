@@ -185,7 +185,6 @@ describe("normalizeDelimiterKey", () => {
       { key: "]", open: "[", close: "]" },
       { key: "{", open: "{", close: "}" },
       { key: "}", open: "{", close: "}" },
-      { key: "B", open: "{", close: "}" },
     ];
 
     for (const bracketCase of cases) {
