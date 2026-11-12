@@ -66,6 +66,7 @@ import {
 import {
   DEFAULT_EX_COMMAND_SETTINGS,
   type ExCommandSettings,
+  type LabelSide,
   type SurfaceSyncMap,
 } from "./settings.js";
 import {
@@ -475,6 +476,11 @@ export type ModalEditorOptions = {
   // Reverse-video transform applied to the label. When the label defers to the
   // host color it is wrapped with this so it keeps its block styling.
   labelTransform?: ((s: string) => string) | null;
+  // Side of the footer line that holds the label. Default "right".
+  labelSide?: LabelSide;
+  // `c` writes the changed text to the unnamed register. False drops it, like
+  // `nnoremap c "_c`. Default true.
+  changeWritesRegister?: boolean;
   // vim-wordmotion: lowercase w/b/e/ge/iw/aw split CamelCase, snake_case and
   // kebab-case words. Off by default in the engine (stock Vim words).
   wordMotion?: boolean;
@@ -527,6 +533,10 @@ export class ModalEditor extends CustomEditor {
   private readonly surround: boolean;
   private readonly shiftWidth: number;
   private readonly selectionColor: (s: string) => string;
+  private readonly labelSide: LabelSide;
+  private readonly changeWritesRegister: boolean;
+  /** True while a `c` operator runs with `changeWritesRegister` off. */
+  private changeDiscardsRegister = false;
   private visualAnchor: VisualPosition | null = null;
   private pendingExCommand: string | null = null;
   private acceptingBracketedPasteInExCommand: boolean = false;
@@ -636,6 +646,8 @@ export class ModalEditor extends CustomEditor {
     this.surround = opts?.surround === true;
     this.shiftWidth = Math.max(1, Math.floor(opts?.shiftWidth ?? 2));
     this.selectionColor = opts?.selectionColor ?? DEFAULT_SELECTION_COLOR;
+    this.labelSide = opts?.labelSide ?? "right";
+    this.changeWritesRegister = opts?.changeWritesRegister ?? true;
     this.installModeBorderColorizer();
     this.installVisualSelectionPainter();
   }
@@ -3152,6 +3164,21 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingChange(data: string): void {
+    if (this.changeWritesRegister) {
+      this.runPendingChange(data);
+      return;
+    }
+    // `c` without a register write: arm the drop for the whole operation.
+    const previous = this.changeDiscardsRegister;
+    this.changeDiscardsRegister = true;
+    try {
+      this.runPendingChange(data);
+    } finally {
+      this.changeDiscardsRegister = previous;
+    }
+  }
+
+  private runPendingChange(data: string): void {
     if (this.opDigit(data)) return;
 
     if (data === "%") {
@@ -4504,6 +4531,7 @@ export class ModalEditor extends CustomEditor {
     source: RegisterWriteSource = "mutation",
   ): void {
     if (this.blackHoleRegister) return;
+    if (this.changeDiscardsRegister && source === "mutation") return;
     if (this.rowCtx) text = this.unwrapRegisterText(text);
     text = this.expandRegisterPasteMarkers(text);
     this.unnamedRegister = text;
@@ -5477,9 +5505,12 @@ export class ModalEditor extends CustomEditor {
         c.l = lastLine;
         c.w = contentWidth;
         c.label = label;
-        // Replace only the rightmost label span, keeping host indicators at
-        // their original columns in the remaining border.
-        c.result = sliceByColumn(lastLine, 0, contentWidth) + label;
+        // Replace only the label's own span so host indicators keep their
+        // columns: at the line start, or at the right edge for "right".
+        c.result =
+          this.labelSide === "left"
+            ? label + sliceByColumn(lastLine, visibleWidth(rawLabel), width)
+            : sliceByColumn(lastLine, 0, contentWidth) + label;
       }
       lines[last] = c.result;
     } else {

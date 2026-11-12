@@ -19,6 +19,10 @@ export type ExCommandSettings = {
 
 export type BorderSyncMode = boolean | "inherit";
 
+// Side of the footer line that holds the mode label. "right" replaces the
+// rightmost span of the border; "left" puts the label at the line start.
+export type LabelSide = "left" | "right";
+
 // Per-surface paint policy for a single mode:
 //   - "mode"     always paint that mode's color;
 //   - "host"     always show the host's current border color;
@@ -46,6 +50,11 @@ export type PiVimSettings = {
   borderSync?: SurfaceSyncMap;
   // Per-mode paint policy for pi-vim's footer mode label. Default: "mode".
   labelSync?: SurfaceSyncMap;
+  // Side of the footer line for the mode label. Default: "right".
+  labelSide?: LabelSide;
+  // `c` writes the changed text to the unnamed register. Set false to drop it,
+  // like `nnoremap c "_c`. Default: true.
+  changeWritesRegister?: unknown;
   // Deprecated, never-released alias superseded by borderSync/labelSync; still
   // accepted and translated in `resolveSurfaceSyncMaps`. `false`/absent → both
   // maps at their defaults; `true` → borderSync all "mode"; the never-released
@@ -139,13 +148,13 @@ export function readPiVimDisplayLineMotion(g: unknown, p: unknown) {
 }
 
 /**
- * A boolean feature toggle (wordMotion, targets, surround): the project value
- * wins when present, else the global one.
+ * A boolean feature toggle (wordMotion, targets, surround, changeWritesRegister):
+ * the project value wins when present, else the global one.
  */
 export function readPiVimToggle(
   g: unknown,
   p: unknown,
-  key: "wordMotion" | "targets" | "surround",
+  key: "wordMotion" | "targets" | "surround" | "changeWritesRegister",
 ) {
   let v = get(p, key);
   if (v === M) v = get(g, key);
@@ -260,6 +269,16 @@ export function readPiVimLabelSync(
   return surfaceMap(get(g, "labelSync"), LABEL_SYNC_DEFAULT);
 }
 
+export function readPiVimChangeWritesRegister(g: unknown, p: unknown) {
+  return readPiVimToggle(g, p, "changeWritesRegister");
+}
+
+export function readPiVimLabelSide(g: unknown, p: unknown): LabelSide | undefined {
+  let v = get(p, "labelSide");
+  if (v === M) v = get(g, "labelSide");
+  return v === "left" || v === "right" ? v : undefined;
+}
+
 // Collapses the two new per-mode maps and the deprecated legacy key into the
 // two full maps pi-vim paints with. A present new map wins over the legacy key
 // for its surface; otherwise the legacy value is translated:
@@ -301,6 +320,8 @@ function disk(cwd: string): PiVimSettings {
     modeChange: readPiVimModeChange(g, p),
     borderSync: readPiVimBorderSync(g, p),
     labelSync: readPiVimLabelSync(g, p),
+    labelSide: readPiVimLabelSide(g, p),
+    changeWritesRegister: readPiVimChangeWritesRegister(g, p),
     syncBorderColorWithMode: readPiVimBorderSyncSetting(g, p),
   };
 }

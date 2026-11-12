@@ -23,6 +23,35 @@ function createSpawnErrno(message: string): Error {
   return error;
 }
 
+describe("change register setting", () => {
+  it("keeps the last yank after a change when disabled", async () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("foo bar", {
+      changeWritesRegister: false,
+    });
+    editor.setClipboardMirrorPolicy("all");
+
+    sendKeys(editor, ["d", "w"]);
+    await nextClipboardDrain();
+    sendKeys(editor, ["c", "w"]);
+    await nextClipboardDrain();
+
+    assert.equal(editor.getRegister(), "foo ");
+    assert.deepEqual(clipboardWrites, ["foo "]);
+  });
+
+  it("still writes the register when the setting keeps its default", async () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("foo bar");
+    editor.setClipboardMirrorPolicy("yank");
+
+    sendKeys(editor, ["d", "w"]);
+    sendKeys(editor, ["c", "w"]);
+    await nextClipboardDrain();
+
+    assert.equal(editor.getRegister(), "bar");
+    assert.deepEqual(clipboardWrites, []);
+  });
+});
+
 describe("clipboard mirror policy", () => {
   it("all clipboard mirror policy mirrors mutation and yank writes", async () => {
     const { editor, clipboardWrites } = createEditorWithSpy("foo bar");

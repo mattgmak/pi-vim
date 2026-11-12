@@ -5,6 +5,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { ModalEditor } from "../src/index.js";
+import type { ModalEditorOptions } from "../src/engine/modal-editor.js";
 
 type ModalEditorConstructorArgs = ConstructorParameters<typeof ModalEditor>;
 
@@ -197,7 +198,10 @@ export function setInternalCursor(
  *   2. Escape → NORMAL mode.
  *   3. Press "0" → cursor to line start.
  */
-export function createEditorWithSpy(initialText: string): {
+export function createEditorWithSpy(
+  initialText: string,
+  options?: ModalEditorOptions,
+): {
   editor: ModalEditor;
   clipboardWrites: string[];
   quitCalls: number;
@@ -206,7 +210,7 @@ export function createEditorWithSpy(initialText: string): {
   const clipboardWrites: string[] = [];
   const notifications: string[] = [];
   let quitCalls = 0;
-  const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings);
+  const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, options);
 
   editor.setClipboardFn((text) => clipboardWrites.push(text));
   editor.setClipboardReadFn(() => null);

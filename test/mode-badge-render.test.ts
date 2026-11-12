@@ -168,3 +168,49 @@ describe("right mode badge rendering", () => {
     assert.equal(compositions, 5);
   });
 });
+
+describe("left mode badge rendering", () => {
+  it("puts the label at the line start and keeps the rest of the border", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, { labelSide: "left" });
+    editor.setText("hello");
+    const native = CustomEditor.prototype.render.call(editor, 40);
+    const rendered = editor.render(40);
+
+    assert.deepEqual(rendered.slice(0, -1), native.slice(0, -1));
+    assert.equal(rendered.at(-1), " INSERT " + "─".repeat(32));
+    sendKeys(editor, ["\x1b"]);
+    assert.equal(footer(editor, 40), " NORMAL " + "─".repeat(32));
+  });
+
+  it("keeps a host gauge when the label moves to the left", () => {
+    const colorize = (text: string): string => `\x1b[35m\x1b[7m${text}\x1b[27m\x1b[39m`;
+    const editor = new GaugeEditor(stubTui, stubTheme, stubKeybindings, {
+      labelColorizers: { insert: colorize, normal: colorize, visual: colorize, ex: colorize },
+      labelSide: "left",
+    });
+    editor.borderColor = (text: string) => `\x1b[32m${text}\x1b[39m`;
+    editor.setText(Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n"));
+    setInternalCursor(editor, 0);
+    const rendered = footer(editor, 80);
+
+    assert.ok(rendered.startsWith(colorize(" INSERT ")));
+    assert.ok(stripTerminalSequences(rendered).includes(" 42% "));
+    assert.equal(visibleWidth(rendered), 80);
+  });
+
+  for (const width of [8, 12, 20]) {
+    it(`replaces the leftmost columns at width ${width}`, () => {
+      const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, { labelSide: "left" });
+      const label = fitModeLabel(" INSERT ", width);
+      const native = nativeFooter(editor, width);
+      const rendered = footer(editor, width);
+
+      assert.equal(
+        stripTerminalSequences(rendered),
+        stripTerminalSequences(label) +
+          stripTerminalSequences(native).slice(visibleWidth(label), width),
+      );
+      assert.equal(visibleWidth(rendered), width);
+    });
+  }
+});

@@ -85,6 +85,8 @@ export function resolveSessionConfig(
     offBorderColor: theme ? buildOffBorderColor(theme) : null,
     selectionColor: theme ? buildSelectionColor(theme) : null,
     labelTransform: reverseVideo,
+    labelSide: settings.labelSide ?? "right",
+    changeWritesRegister: settings.changeWritesRegister !== false,
     displayLineMotion,
     ...toggles,
   };

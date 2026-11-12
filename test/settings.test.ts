@@ -6,8 +6,10 @@ import {
   readPiVimBorderSync,
   readPiVimBorderSyncSetting,
   readPiVimClipboardMirrorSetting,
+  readPiVimChangeWritesRegister,
   readPiVimExCommandSetting,
   readPiVimGlobalExCommandSetting,
+  readPiVimLabelSide,
   readPiVimLabelSync,
   readPiVimModeChange,
   readPiVimModeColors,
@@ -700,6 +702,55 @@ describe("piVim plugin toggles (wordMotion, targets, surround)", () => {
       assert.equal(config.editorOptions.targets, true);
       assert.equal(config.editorOptions.surround, false);
       assert.deepEqual(config.warnings, ["Invalid piVim.targets; expected a boolean."]);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("piVim.labelSide reader", () => {
+  it("defaults to undefined and accepts left and right", () => {
+    assert.equal(readPiVimLabelSide(undefined, undefined), undefined);
+    assert.equal(readPiVimLabelSide({ piVim: {} }, { piVim: {} }), undefined);
+    assert.equal(readPiVimLabelSide({ piVim: { labelSide: "left" } }, {}), "left");
+    assert.equal(readPiVimLabelSide({ piVim: { labelSide: "right" } }, {}), "right");
+  });
+
+  it("lets the project value win and ignores invalid values", () => {
+    assert.equal(
+      readPiVimLabelSide({ piVim: { labelSide: "right" } }, { piVim: { labelSide: "left" } }),
+      "left",
+    );
+    assert.equal(readPiVimLabelSide({ piVim: { labelSide: "centre" } }, {}), undefined);
+  });
+});
+
+describe("piVim.changeWritesRegister reader", () => {
+  it("reads the global and project values", () => {
+    assert.equal(readPiVimChangeWritesRegister(undefined, undefined), undefined);
+    assert.equal(
+      readPiVimChangeWritesRegister({ piVim: { changeWritesRegister: false } }, {}),
+      false,
+    );
+    assert.equal(
+      readPiVimChangeWritesRegister(
+        { piVim: { changeWritesRegister: false } },
+        { piVim: { changeWritesRegister: true } },
+      ),
+      true,
+    );
+  });
+
+  it("passes both new settings through resolveSessionConfig", () => {
+    const restore = setPiVimSettingsReaderForTests(() => ({
+      labelSide: "left",
+      changeWritesRegister: false,
+    }));
+    try {
+      const config = resolveSessionConfig("/tmp", undefined, () => {});
+      assert.equal(config.editorOptions.labelSide, "left");
+      assert.equal(config.editorOptions.changeWritesRegister, false);
+      assert.deepEqual(config.warnings, []);
     } finally {
       restore();
     }

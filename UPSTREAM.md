@@ -13,6 +13,8 @@ This repo holds one package from [justmytwospence/pi-plugins](https://github.com
 2. `src/engine/modal-editor.ts`: `openLineBelow` and `openLineAbove` insert the newline through `insertTextAtCursor`. The old byte replay matched pi-copy's `ctrl+j` shortcut, so `o` opened copy mode.
 3. `src/main-editor.ts` and `src/index.ts`: Normal-mode Backspace opens pi-copy's copy mode through the `copy-mode:open` event.
 4. `src/main-editor.ts`: `Ctrl+U` and `Ctrl+D` scroll the transcript in Normal mode too. The upstream gate allowed Insert mode only.
+5. `src/engine/modal-editor.ts`, `src/engine/settings.ts`, `src/session.ts`: `piVim.labelSide` moves the mode label to the start of the footer line. The upstream footer always places it at the right edge.
+6. `src/engine/modal-editor.ts`, `src/engine/settings.ts`, `src/session.ts`: `piVim.changeWritesRegister` set to `false` drops the changed text instead of writing the unnamed register, like `nnoremap c "_c` in Neovim.
 
 ## Sync with upstream
 
