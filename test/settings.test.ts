@@ -13,6 +13,7 @@ import {
   readPiVimLabelSync,
   readPiVimModeChange,
   readPiVimModeColors,
+  readPiVimPromptMarker,
   readPiVimToggle,
   resolveExCommandSettings,
   setPiVimSettingsReaderForTests,
@@ -745,14 +746,31 @@ describe("piVim.changeWritesRegister reader", () => {
     const restore = setPiVimSettingsReaderForTests(() => ({
       labelSide: "left",
       changeWritesRegister: false,
+      promptMarker: true,
     }));
     try {
       const config = resolveSessionConfig("/tmp", undefined, () => {});
       assert.equal(config.editorOptions.labelSide, "left");
       assert.equal(config.editorOptions.changeWritesRegister, false);
+      assert.equal(config.editorOptions.promptMarker, true);
       assert.deepEqual(config.warnings, []);
     } finally {
       restore();
     }
+  });
+});
+
+describe("piVim.promptMarker reader", () => {
+  it("reads the global and project values", () => {
+    assert.equal(readPiVimPromptMarker(undefined, undefined), undefined);
+    assert.equal(readPiVimPromptMarker({ piVim: {} }, { piVim: {} }), undefined);
+    assert.equal(readPiVimPromptMarker({ piVim: { promptMarker: true } }, {}), true);
+    assert.equal(
+      readPiVimPromptMarker(
+        { piVim: { promptMarker: true } },
+        { piVim: { promptMarker: false } },
+      ),
+      false,
+    );
   });
 });

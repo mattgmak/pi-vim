@@ -10002,3 +10002,44 @@ describe("visual mode — undo", () => {
     assert.equal(editor.getText(), "abc\ndef");
   });
 });
+
+describe("blank line motions — [ and ] with space", () => {
+  it("] space opens a blank line below the cursor line", () => {
+    const { editor } = createMultiLineEditor("alpha\nbeta");
+    sendKeys(editor, ["]", " "]);
+
+    assert.equal(editor.getText(), "alpha\n\nbeta");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("[ space opens a blank line above the cursor line", () => {
+    const { editor } = createMultiLineEditor("alpha\nbeta");
+    sendKeys(editor, ["[", " "]);
+
+    assert.equal(editor.getText(), "\nalpha\nbeta");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("works on a single-line prompt", () => {
+    const { editor } = createEditorWithSpy("alpha");
+    sendKeys(editor, ["]", " "]);
+
+    assert.equal(editor.getText(), "alpha\n");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("consumes an unmapped ]x without deleting", () => {
+    const { editor } = createEditorWithSpy("alpha");
+    sendKeys(editor, ["]", "x"]);
+
+    assert.equal(editor.getText(), "alpha");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("leaves the pending state clear after one pair", () => {
+    const { editor } = createEditorWithSpy("alpha");
+    sendKeys(editor, ["[", " ", " "]);
+
+    assert.equal(editor.getText(), "\nalpha");
+  });
+});

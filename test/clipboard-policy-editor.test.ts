@@ -50,6 +50,54 @@ describe("change register setting", () => {
     assert.equal(editor.getRegister(), "bar");
     assert.deepEqual(clipboardWrites, []);
   });
+
+  it("keeps the last yank after C when disabled", async () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("foo bar", {
+      changeWritesRegister: false,
+    });
+    editor.setClipboardMirrorPolicy("all");
+
+    sendKeys(editor, ["d", "w"]);
+    await nextClipboardDrain();
+    sendKeys(editor, ["C"]);
+    await nextClipboardDrain();
+
+    assert.equal(editor.getRegister(), "foo ");
+    assert.deepEqual(clipboardWrites, ["foo "]);
+    assert.equal(editor.getText(), "");
+  });
+
+  it("keeps the last yank after s when disabled", async () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("foo bar", {
+      changeWritesRegister: false,
+    });
+    editor.setClipboardMirrorPolicy("all");
+
+    sendKeys(editor, ["d", "w"]);
+    await nextClipboardDrain();
+    sendKeys(editor, ["s"]);
+    await nextClipboardDrain();
+
+    assert.equal(editor.getRegister(), "foo ");
+    assert.deepEqual(clipboardWrites, ["foo "]);
+    assert.equal(editor.getText(), "ar");
+  });
+
+  it("keeps the last yank after a visual change when disabled", async () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("foo bar", {
+      changeWritesRegister: false,
+    });
+    editor.setClipboardMirrorPolicy("all");
+
+    sendKeys(editor, ["y", "w"]);
+    await nextClipboardDrain();
+    sendKeys(editor, ["v", "l", "l", "c", "x", "\x1b"]);
+    await nextClipboardDrain();
+
+    assert.equal(editor.getRegister(), "foo ");
+    assert.deepEqual(clipboardWrites, ["foo "]);
+    assert.equal(editor.getText(), "x bar");
+  });
 });
 
 describe("clipboard mirror policy", () => {

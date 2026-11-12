@@ -55,6 +55,8 @@ export type PiVimSettings = {
   // `c` writes the changed text to the unnamed register. Set false to drop it,
   // like `nnoremap c "_c`. Default: true.
   changeWritesRegister?: unknown;
+  // Shows ` N ` / ` I ` / ` V ` / ` L ` before the composer text. Default: false.
+  promptMarker?: unknown;
   // Deprecated, never-released alias superseded by borderSync/labelSync; still
   // accepted and translated in `resolveSurfaceSyncMaps`. `false`/absent → both
   // maps at their defaults; `true` → borderSync all "mode"; the never-released
@@ -148,13 +150,18 @@ export function readPiVimDisplayLineMotion(g: unknown, p: unknown) {
 }
 
 /**
- * A boolean feature toggle (wordMotion, targets, surround, changeWritesRegister):
- * the project value wins when present, else the global one.
+ * A boolean feature toggle (wordMotion, targets, surround, changeWritesRegister,
+ * promptMarker): the project value wins when present, else the global one.
  */
 export function readPiVimToggle(
   g: unknown,
   p: unknown,
-  key: "wordMotion" | "targets" | "surround" | "changeWritesRegister",
+  key:
+    | "wordMotion"
+    | "targets"
+    | "surround"
+    | "changeWritesRegister"
+    | "promptMarker",
 ) {
   let v = get(p, key);
   if (v === M) v = get(g, key);
@@ -273,6 +280,10 @@ export function readPiVimChangeWritesRegister(g: unknown, p: unknown) {
   return readPiVimToggle(g, p, "changeWritesRegister");
 }
 
+export function readPiVimPromptMarker(g: unknown, p: unknown) {
+  return readPiVimToggle(g, p, "promptMarker");
+}
+
 export function readPiVimLabelSide(g: unknown, p: unknown): LabelSide | undefined {
   let v = get(p, "labelSide");
   if (v === M) v = get(g, "labelSide");
@@ -322,6 +333,7 @@ function disk(cwd: string): PiVimSettings {
     labelSync: readPiVimLabelSync(g, p),
     labelSide: readPiVimLabelSide(g, p),
     changeWritesRegister: readPiVimChangeWritesRegister(g, p),
+    promptMarker: readPiVimPromptMarker(g, p),
     syncBorderColorWithMode: readPiVimBorderSyncSetting(g, p),
   };
 }

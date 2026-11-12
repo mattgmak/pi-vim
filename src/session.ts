@@ -87,6 +87,7 @@ export function resolveSessionConfig(
     labelTransform: reverseVideo,
     labelSide: settings.labelSide ?? "right",
     changeWritesRegister: settings.changeWritesRegister !== false,
+    promptMarker: settings.promptMarker === true,
     displayLineMotion,
     ...toggles,
   };

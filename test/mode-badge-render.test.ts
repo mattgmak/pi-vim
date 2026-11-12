@@ -214,3 +214,75 @@ describe("left mode badge rendering", () => {
     });
   }
 });
+
+describe("prompt marker rendering", () => {
+  const composerLine = (editor: ModalEditor, width = 40): string =>
+    stripTerminalSequences(editor.render(width)[1] ?? "");
+  const nativeComposerLine = (editor: ModalEditor, width = 40): string =>
+    stripTerminalSequences(CustomEditor.prototype.render.call(editor, width)[1] ?? "");
+  const footerLine = (editor: ModalEditor, width = 40): string =>
+    stripTerminalSequences(editor.render(width).at(-1) ?? "");
+
+  it("keeps the composer line untouched while the setting is off", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings);
+    editor.setText("hello");
+    assert.equal(composerLine(editor), nativeComposerLine(editor));
+  });
+
+  it("prefixes the composer text with the mode letter", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+      promptMarker: true,
+    });
+    editor.setText("hello");
+    const rendered = editor.render(40);
+
+    assert.equal(stripTerminalSequences(rendered[1]).trimEnd(), " I hello");
+    assert.equal(stripTerminalSequences(rendered[0]), "─".repeat(40));
+  });
+
+  it("shortens the composer line instead of exceeding the width", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+      promptMarker: true,
+    });
+    editor.setText("hello world");
+
+    assert.equal(composerLine(editor, 6), " I hel");
+  });
+
+  it("skips the marker when the width holds no text", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+      promptMarker: true,
+    });
+    editor.setText("hi");
+
+    assert.equal(composerLine(editor, 3), nativeComposerLine(editor, 3));
+  });
+
+  it("pairs with the left label side", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+      promptMarker: true,
+      labelSide: "left",
+    });
+    editor.setText("hello");
+
+    assert.equal(composerLine(editor).trimEnd(), " I hello");
+    assert.ok(footerLine(editor).startsWith(" INSERT "));
+  });
+
+  const modes: Array<[readonly string[], string]> = [
+    [[], "I"],
+    [["\x1b"], "N"],
+    [["\x1b", "v"], "V"],
+    [["\x1b", "V"], "L"],
+  ];
+  for (const [keys, letter] of modes) {
+    it("marks the mode " + letter, () => {
+      const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+        promptMarker: true,
+      });
+      editor.setText("x");
+      sendKeys(editor, [...keys]);
+      assert.equal(composerLine(editor).slice(0, 3), " " + letter + " ");
+    });
+  }
+});

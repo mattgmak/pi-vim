@@ -478,6 +478,9 @@ export type ModalEditorOptions = {
   labelTransform?: ((s: string) => string) | null;
   // Side of the footer line that holds the label. Default "right".
   labelSide?: LabelSide;
+  // ` N ` / ` I ` / ` V ` / ` L ` before the first line of composer text.
+  // Default false: the composer text starts flush left.
+  promptMarker?: boolean;
   // `c` writes the changed text to the unnamed register. False drops it, like
   // `nnoremap c "_c`. Default true.
   changeWritesRegister?: boolean;
@@ -500,11 +503,29 @@ export type ModalEditorOptions = {
 
 const DEFAULT_SELECTION_COLOR = (s: string) => `\x1b[48;5;240m${s}\x1b[49m`;
 
+/** Operator whose register write is in flight, for `changeWritesRegister`. */
+type ActiveOperator = "change" | "other" | null;
+
+/** `c` and `s` change text; every other operator leaves the register alone. */
+function operatorKind(op: string): Exclude<ActiveOperator, null> {
+  return op === "c" || op === "C" || op === "s" ? "change" : "other";
+}
+
+/** The single letter the prompt marker shows for each mode. */
+const MODE_MARKER: Record<Mode, string> = {
+  normal: "N",
+  insert: "I",
+  visual: "V",
+  "visual-line": "L",
+};
+
 export class ModalEditor extends CustomEditor {
   private mode: Mode = "insert";
   private pendingMotion: PendingMotion = null;
   private pendingTextObject: ObjectKind | null = null;
   private pendingOperator: PendingOperator = null;
+  /** Holds `[` or `]` until its second key arrives (`] ` adds a blank line). */
+  private pendingBracket: "[" | "]" | null = null;
   private prefixCount: string = "";
   private operatorCount: string = "";
   private pendingG: boolean = false;
@@ -534,9 +555,10 @@ export class ModalEditor extends CustomEditor {
   private readonly shiftWidth: number;
   private readonly selectionColor: (s: string) => string;
   private readonly labelSide: LabelSide;
+  private readonly promptMarker: boolean;
   private readonly changeWritesRegister: boolean;
-  /** True while a `c` operator runs with `changeWritesRegister` off. */
-  private changeDiscardsRegister = false;
+  /** Set while an operator writes the unnamed register. */
+  private activeOperator: ActiveOperator = null;
   private visualAnchor: VisualPosition | null = null;
   private pendingExCommand: string | null = null;
   private acceptingBracketedPasteInExCommand: boolean = false;
@@ -647,6 +669,7 @@ export class ModalEditor extends CustomEditor {
     this.shiftWidth = Math.max(1, Math.floor(opts?.shiftWidth ?? 2));
     this.selectionColor = opts?.selectionColor ?? DEFAULT_SELECTION_COLOR;
     this.labelSide = opts?.labelSide ?? "right";
+    this.promptMarker = opts?.promptMarker ?? false;
     this.changeWritesRegister = opts?.changeWritesRegister ?? true;
     this.installModeBorderColorizer();
     this.installVisualSelectionPainter();
@@ -742,6 +765,7 @@ export class ModalEditor extends CustomEditor {
   private getPendingKeys(): string {
     let keys = this.pendingRegister ? '"' : "";
     keys += this.prefixCount;
+    if (this.pendingBracket) keys += this.pendingBracket;
     if (this.pendingOperator) keys += this.pendingOperator + this.operatorCount;
     if (this.pendingOpG) keys += "g";
     if (this.pendingG) keys += `g${this.pendingGCount}`;
@@ -1735,6 +1759,7 @@ export class ModalEditor extends CustomEditor {
     this.pendingOpG = false;
     this.pendingTextObjectWhich = null;
     this.pendingSwallow = null;
+    this.pendingBracket = null;
     this.pendingRegister = false;
     this.blackHoleRegister = false;
     this.pendingSurround = null;
@@ -3164,18 +3189,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingChange(data: string): void {
-    if (this.changeWritesRegister) {
-      this.runPendingChange(data);
-      return;
-    }
-    // `c` without a register write: arm the drop for the whole operation.
-    const previous = this.changeDiscardsRegister;
-    this.changeDiscardsRegister = true;
-    try {
-      this.runPendingChange(data);
-    } finally {
-      this.changeDiscardsRegister = previous;
-    }
+    this.runAsOperator("change", () => this.runPendingChange(data));
   }
 
   private runPendingChange(data: string): void {
@@ -3345,6 +3359,15 @@ export class ModalEditor extends CustomEditor {
   }
 
   private applyVisualOperator(
+    operator: "d" | "y" | "c",
+    linewise: boolean,
+  ): void {
+    this.runAsOperator(operatorKind(operator), () =>
+      this.runVisualOperator(operator, linewise),
+    );
+  }
+
+  private runVisualOperator(
     operator: "d" | "y" | "c",
     linewise: boolean,
   ): void {
@@ -3856,6 +3879,18 @@ export class ModalEditor extends CustomEditor {
     super.handleInput(ESC_UP);
   }
 
+  /** `[ ` and `] ` insert a blank line above or below and stay in Normal. */
+  private finishBracketChord(data: string): boolean {
+    const bracket = this.pendingBracket;
+    this.pendingBracket = null;
+    if (data === " ") {
+      if (bracket === "]") this.openLineBelow();
+      else this.openLineAbove();
+    }
+    // Any other second key is an unmapped `[x`/`]x`: consume it, as Vim does.
+    return true;
+  }
+
   private handleMappedKey(key: string): void {
     const seq = NORMAL_KEYS[key];
     switch (key) {
@@ -3899,18 +3934,24 @@ export class ModalEditor extends CustomEditor {
         this.cutToEndOfLine();
         break;
       case "C":
-        this.takeTotalCount(1);
-        this.cutToEndOfLine();
-        this.setMode();
+        this.runAsOperator("change", () => {
+          this.takeTotalCount(1);
+          this.cutToEndOfLine();
+          this.setMode();
+        });
         break;
       case "S":
-        this.takeTotalCount(1);
-        this.cutCurrentLineContent();
-        this.setMode();
+        this.runAsOperator("change", () => {
+          this.takeTotalCount(1);
+          this.cutCurrentLineContent();
+          this.setMode();
+        });
         break;
       case "s":
-        this.cutCharUnderCursor();
-        this.setMode();
+        this.runAsOperator("change", () => {
+          this.cutCharUnderCursor();
+          this.setMode();
+        });
         break;
       case "x":
         this.cutCharUnderCursor(true);
@@ -4526,12 +4567,23 @@ export class ModalEditor extends CustomEditor {
     }
   }
 
+  /** Run `fn` as `op` so `writeToRegister` can apply `changeWritesRegister`. */
+  private runAsOperator<T>(op: Exclude<ActiveOperator, null>, fn: () => T): T {
+    const previous = this.activeOperator;
+    this.activeOperator = op;
+    try {
+      return fn();
+    } finally {
+      this.activeOperator = previous;
+    }
+  }
+
   private writeToRegister(
     text: string,
     source: RegisterWriteSource = "mutation",
   ): void {
     if (this.blackHoleRegister) return;
-    if (this.changeDiscardsRegister && source === "mutation") return;
+    if (this.activeOperator === "change" && !this.changeWritesRegister) return;
     if (this.rowCtx) text = this.unwrapRegisterText(text);
     text = this.expandRegisterPasteMarkers(text);
     this.unnamedRegister = text;
@@ -5516,7 +5568,21 @@ export class ModalEditor extends CustomEditor {
     } else {
       lines[last] = label;
     }
+    this.applyPromptMarker(lines, width);
     return lines;
+  }
+
+  /** ` N ` before the composer text, painted with the footer label's colors. */
+  private applyPromptMarker(lines: string[], width: number): void {
+    // The base render is [top border, ...text lines, bottom border], so the
+    // first composer line sits at index 1.
+    if (!this.promptMarker || lines.length < 3) return;
+    const raw = ` ${MODE_MARKER[this.mode]} `;
+    const colorize = this.getModeLabelColorizer();
+    const marker = colorize ? colorize(raw) : raw;
+    const markerWidth = visibleWidth(raw);
+    if (markerWidth >= width) return;
+    lines[1] = marker + sliceByColumn(lines[1], 0, width - markerWidth);
   }
 
   // ---------------------------------------------------------------------------
@@ -5547,6 +5613,11 @@ export class ModalEditor extends CustomEditor {
   /** Normal and Visual keys added on top of upstream. True when consumed. */
   private handleExtendedNormalKey(data: string): boolean {
     const visual = isVisualMode(this.mode);
+    if (this.pendingBracket) return this.finishBracketChord(data);
+    if (!visual && (data === "[" || data === "]")) {
+      this.pendingBracket = data;
+      return true;
+    }
     if (data === '"') {
       this.pendingRegister = true;
       return true;
@@ -6145,6 +6216,10 @@ export class ModalEditor extends CustomEditor {
   // --- applying operators ---------------------------------------------------------
 
   private applyOperatorSpan(op: string, span: ObjectSpan): void {
+    this.runAsOperator(operatorKind(op), () => this.runOperatorSpan(op, span));
+  }
+
+  private runOperatorSpan(op: string, span: ObjectSpan): void {
     this.pendingOperator = null;
     const buf = this.vimBuffer();
     // Vim's oap->start (where case operators leave the cursor) and the column

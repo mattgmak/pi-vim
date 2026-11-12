@@ -15,6 +15,9 @@ This repo holds one package from [justmytwospence/pi-plugins](https://github.com
 4. `src/main-editor.ts`: `Ctrl+U` and `Ctrl+D` scroll the transcript in Normal mode too. The upstream gate allowed Insert mode only.
 5. `src/engine/modal-editor.ts`, `src/engine/settings.ts`, `src/session.ts`: `piVim.labelSide` moves the mode label to the start of the footer line. The upstream footer always places it at the right edge.
 6. `src/engine/modal-editor.ts`, `src/engine/settings.ts`, `src/session.ts`: `piVim.changeWritesRegister` set to `false` drops the changed text instead of writing the unnamed register, like `nnoremap c "_c` in Neovim.
+7. `src/engine/modal-editor.ts`: the `changeWritesRegister` gate now covers `C`, `S`, `s`, and the Visual-mode `c`. The first version gated only the `c`+motion path, so the other change operators still wrote the register.
+8. `src/engine/modal-editor.ts`, `src/engine/settings.ts`, `src/session.ts`: `piVim.promptMarker` draws ` N `, ` I `, ` V `, or ` L ` before the composer text in the mode color. The setting defaults to off.
+9. `src/engine/modal-editor.ts`: `] ` and `[ ` in Normal mode open a blank line below or above the cursor line and keep Normal mode.
 
 ## Sync with upstream
 
