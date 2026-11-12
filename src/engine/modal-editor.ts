@@ -461,6 +461,9 @@ export type ModalEditorOptions = {
   // `noremap j gj` / `noremap k gk` vim setup. Operators (dj, yk) stay linewise.
   displayLineMotion?: boolean;
   labelColorizers?: ModeColorizers | null;
+  // Background paints for the prompt marker's trailing space. When absent, the
+  // extra space stays unstyled.
+  labelBgColorizers?: ModeColorizers | null;
   borderColorizers?: ModeColorizers | null;
   // Per-mode paint policy for each surface. "mode" paints the mode color;
   // "host" shows the host's current border color; "thinking" shows the host
@@ -588,6 +591,7 @@ export class ModalEditor extends CustomEditor {
   private currentTransition: TransitionState = "none";
   private onChangeHooked: boolean = false;
   private readonly labelColorizers: ModeColorizers | null;
+  private readonly labelBgColorizers: ModeColorizers | null;
   private readonly borderColorizers: ModeColorizers | null;
   private readonly offBorderColor: ((s: string) => string) | null;
   // Latest host-assigned border color and whether it is the neutral resting
@@ -657,6 +661,7 @@ export class ModalEditor extends CustomEditor {
     this.cursorShapeTui =
       typeof tui === "object" && tui !== null ? (tui as object) : null;
     this.labelColorizers = opts?.labelColorizers ?? null;
+    this.labelBgColorizers = opts?.labelBgColorizers ?? null;
     this.borderColorizers = opts?.borderColorizers ?? null;
     this.offBorderColor = opts?.offBorderColor ?? null;
     this.borderSync = opts?.borderSync ?? null;
@@ -1244,7 +1249,7 @@ export class ModalEditor extends CustomEditor {
       let changed = false;
       this.withTransition("undo", () => {
         const beforeUndo = this.captureSnapshot();
-        super.handleInput(CTRL_UNDERSCORE);
+        this.baseEdit(CTRL_UNDERSCORE);
         const afterUndo = this.captureSnapshot();
 
         if (this.snapshotChanged(beforeUndo, afterUndo)) {
@@ -1922,7 +1927,7 @@ export class ModalEditor extends CustomEditor {
     const origin = this.getCursor();
     const stack = (this as unknown as ModalEditorInternals).undoStack?.stack;
     const depth = stack?.length ?? 0;
-    if (!this.isCursorAtOrPastEol()) super.handleInput(ESC_RIGHT);
+    if (!this.isCursorAtOrPastEol()) this.baseEdit(ESC_RIGHT);
     // The host paste path keeps its file-path spacing, large-paste markers and
     // single undo snapshot.
     handlePaste.call(this, payload);
@@ -2292,11 +2297,11 @@ export class ModalEditor extends CustomEditor {
 
       if ("insert" === this.mode) {
         if (matchesKey(data, Key.shiftAlt("a")) || data === "\x1bA") {
-          super.handleInput(CTRL_E);
+          this.baseEdit(CTRL_E);
           return;
         }
         if (matchesKey(data, Key.shiftAlt("i")) || data === "\x1bI") {
-          super.handleInput(CTRL_A);
+          this.baseEdit(CTRL_A);
           return;
         }
         if (matchesKey(data, Key.alt("o")) || data === "\x1bo") {
@@ -3866,17 +3871,56 @@ export class ModalEditor extends CustomEditor {
     super.handleInput(data);
   }
 
-  // handleInput routes through the keymap, and "\n" is Ctrl+J. An extension
-  // that claims Ctrl+J captures the replayed byte, so insert the text directly.
+  // Engine edits call the base editor's own methods instead of replaying keys.
+  // Pi's CustomEditor.handleInput checks extension shortcuts before its own
+  // editing actions, and pi-tui's handleInput resolves every byte against the
+  // user's keybindings.json. A replayed Ctrl+K therefore runs whatever the user
+  // bound Ctrl+K to, and "\n" is the same byte as Ctrl+J. The table below names
+  // the pi-tui method each byte triggers; entries use the base implementation so
+  // ModalEditor's own overrides stay out of an internal edit. Input the table
+  // does not cover falls back to super.handleInput().
+  private baseEdit(key: string): void {
+    const base = this as unknown as {
+      addNewLine?: () => void;
+      deleteToEndOfLine?: () => void;
+      insertCharacter?: (char: string, skipUndoCoalescing?: boolean) => void;
+      moveCursor?: (deltaLine: number, deltaCol: number) => void;
+      moveToLineStart?: () => void;
+      moveToLineEnd?: () => void;
+      undo?: () => void;
+    };
+    const actions: Record<string, (() => void) | undefined> = {
+      [CTRL_A]: () => base.moveToLineStart?.(),
+      [CTRL_E]: () => base.moveToLineEnd?.(),
+      [CTRL_K]: () => base.deleteToEndOfLine?.(),
+      [CTRL_UNDERSCORE]: () => base.undo?.(),
+      [ESC_LEFT]: () => base.moveCursor?.(0, -1),
+      [ESC_RIGHT]: () => base.moveCursor?.(0, 1),
+      [ESC_UP]: () => base.moveCursor?.(-1, 0),
+      [ESC_DOWN]: () => base.moveCursor?.(1, 0),
+      [NEWLINE]: () => base.addNewLine?.(),
+    };
+    const action = actions[key];
+    if (action) {
+      action();
+      return;
+    }
+    if (isPrintableChunk(key)) {
+      base.insertCharacter?.(key);
+      return;
+    }
+    super.handleInput(key);
+  }
+
   private openLineBelow(): void {
-    super.handleInput(CTRL_E);
-    super.insertTextAtCursor(NEWLINE);
+    this.baseEdit(CTRL_E);
+    this.baseEdit(NEWLINE);
   }
 
   private openLineAbove(): void {
-    super.handleInput(CTRL_A);
-    super.insertTextAtCursor(NEWLINE);
-    super.handleInput(ESC_UP);
+    this.baseEdit(CTRL_A);
+    this.baseEdit(NEWLINE);
+    this.baseEdit(ESC_UP);
   }
 
   /** `[ ` and `] ` insert a blank line above or below and stay in Normal. */
@@ -3900,12 +3944,12 @@ export class ModalEditor extends CustomEditor {
       case "a":
         this.setMode();
         if (!this.isCursorAtOrPastEol()) {
-          super.handleInput(ESC_RIGHT);
+          this.baseEdit(ESC_RIGHT);
         }
         break;
       case "A":
         this.setMode();
-        super.handleInput(CTRL_E);
+        this.baseEdit(CTRL_E);
         break;
       case "I":
         this.setMode();
@@ -3966,7 +4010,7 @@ export class ModalEditor extends CustomEditor {
         this.moveCursorVertically(-1, this.displayLineMotion);
         break;
       default:
-        if (seq) super.handleInput(seq);
+        if (seq) this.baseEdit(seq);
     }
   }
 
@@ -4048,7 +4092,7 @@ export class ModalEditor extends CustomEditor {
 
     const seq = delta > 0 ? ESC_RIGHT : ESC_LEFT;
     for (let i = 0; i < Math.abs(delta); i++) {
-      super.handleInput(seq);
+      this.baseEdit(seq);
     }
   }
 
@@ -4077,7 +4121,7 @@ export class ModalEditor extends CustomEditor {
     if (!state || !Array.isArray(state.lines) || state.lines.length === 0) {
       const seq = delta > 0 ? ESC_DOWN : ESC_UP;
       for (let i = 0; i < Math.abs(delta); i++) {
-        super.handleInput(seq);
+        this.baseEdit(seq);
       }
       return;
     }
@@ -4144,7 +4188,7 @@ export class ModalEditor extends CustomEditor {
 
     const state = editor.state;
     if (!state || !Array.isArray(state.lines) || state.lines.length === 0) {
-      super.handleInput(CTRL_A);
+      this.baseEdit(CTRL_A);
       return;
     }
 
@@ -4707,7 +4751,7 @@ export class ModalEditor extends CustomEditor {
       col < line.length ? line.slice(col) : hasNextLine ? "\n" : "";
 
     if (deleted !== "") this.writeToRegister(deleted);
-    super.handleInput(CTRL_K);
+    this.baseEdit(CTRL_K);
   }
 
   private cutCurrentLineContent(): void {
@@ -4719,8 +4763,8 @@ export class ModalEditor extends CustomEditor {
     const deleted = line.length > 0 ? line : hasNextLine ? "\n" : "";
 
     this.writeToRegister(deleted);
-    super.handleInput(CTRL_A);
-    super.handleInput(CTRL_K);
+    this.baseEdit(CTRL_A);
+    this.baseEdit(CTRL_K);
   }
 
   private cutLine(): void {
@@ -4789,7 +4833,7 @@ export class ModalEditor extends CustomEditor {
       const newText = text.slice(0, startAbs) + text.slice(endAbs);
       this.replaceTextInBuffer(newText, startAbs);
 
-      super.handleInput(CTRL_A);
+      this.baseEdit(CTRL_A);
     }
   }
 
@@ -5399,10 +5443,10 @@ export class ModalEditor extends CustomEditor {
       const content = text.slice(0, -1);
       const targetLine = this.getCursor().line + 1;
       for (let i = 0; i < safeCount; i++) {
-        super.handleInput(CTRL_E);
-        super.handleInput(NEWLINE);
+        this.baseEdit(CTRL_E);
+        this.baseEdit(NEWLINE);
         for (const char of content) {
-          super.handleInput(char === "\n" ? NEWLINE : char);
+          this.baseEdit(char);
         }
       }
       // Vim: line-wise `p` leaves the cursor on the first non-blank of the
@@ -5414,11 +5458,11 @@ export class ModalEditor extends CustomEditor {
     }
 
     if (!this.isCursorAtOrPastEol()) {
-      super.handleInput(ESC_RIGHT);
+      this.baseEdit(ESC_RIGHT);
     }
     for (let i = 0; i < safeCount; i++) {
       for (const char of text) {
-        super.handleInput(char === "\n" ? NEWLINE : char);
+        this.baseEdit(char);
       }
     }
     this.moveCursorToPreviousGraphemeStart();
@@ -5437,11 +5481,11 @@ export class ModalEditor extends CustomEditor {
       const content = text.slice(0, -1);
       const targetLine = this.getCursor().line;
       for (let i = 0; i < safeCount; i++) {
-        super.handleInput(CTRL_A);
-        super.handleInput(NEWLINE);
-        super.handleInput(ESC_UP);
+        this.baseEdit(CTRL_A);
+        this.baseEdit(NEWLINE);
+        this.baseEdit(ESC_UP);
         for (const char of content) {
-          super.handleInput(char === "\n" ? NEWLINE : char);
+          this.baseEdit(char);
         }
       }
       // Vim: line-wise `P` leaves the cursor on the first non-blank of the
@@ -5454,7 +5498,7 @@ export class ModalEditor extends CustomEditor {
 
     for (let i = 0; i < safeCount; i++) {
       for (const char of text) {
-        super.handleInput(char === "\n" ? NEWLINE : char);
+        this.baseEdit(char);
       }
     }
     this.moveCursorToPreviousGraphemeStart();
@@ -5572,17 +5616,19 @@ export class ModalEditor extends CustomEditor {
     return lines;
   }
 
-  /** ` N ` before the composer text, painted with the footer label's colors. */
+  /** ` N ` plus a background-padded space, painted with the footer label's colors. */
   private applyPromptMarker(lines: string[], width: number): void {
     // The base render is [top border, ...text lines, bottom border], so the
     // first composer line sits at index 1.
     if (!this.promptMarker || lines.length < 3) return;
     const raw = ` ${MODE_MARKER[this.mode]} `;
     const colorize = this.getModeLabelColorizer();
+    const bg = this.getMarkerBgColorizer();
     const marker = colorize ? colorize(raw) : raw;
-    const markerWidth = visibleWidth(raw);
+    const padding = bg ? bg(" ") : " ";
+    const markerWidth = visibleWidth(raw) + 1;
     if (markerWidth >= width) return;
-    lines[1] = marker + sliceByColumn(lines[1], 0, width - markerWidth);
+    lines[1] = marker + padding + sliceByColumn(lines[1], 0, width - markerWidth);
   }
 
   // ---------------------------------------------------------------------------
@@ -6722,6 +6768,13 @@ export class ModalEditor extends CustomEditor {
     const wrap = this.labelTransform ?? ((s: string) => s);
     return (s: string) =>
       this.resolveSurfaceColor(labelColorizers, this.labelSync, s, wrap);
+  }
+
+  // Background painter for the marker's trailing space, or null when the
+  // editor has no background colorizers for the current mode.
+  private getMarkerBgColorizer(): ((s: string) => string) | null {
+    if (!this.labelBgColorizers) return null;
+    return this.labelBgColorizers[this.getActiveMode()] ?? null;
   }
 
   private getModeLabel(): string {

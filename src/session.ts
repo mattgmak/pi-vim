@@ -10,6 +10,7 @@ import { resolveClipboardMirrorPolicy } from "./engine/clipboard-policy.js";
 import type { ModalEditorOptions } from "./engine/modal-editor.js";
 import { createModeChangeHandler } from "./engine/mode-change-command.js";
 import {
+  buildModeBgColorizers,
   buildModeColorizers,
   buildOffBorderColor,
   buildSelectionColor,
@@ -80,6 +81,7 @@ export function resolveSessionConfig(
       ? buildModeColorizers(theme, modeColors, reverseVideo)
       : null,
     borderColorizers: theme ? buildModeColorizers(theme, modeColors) : null,
+    labelBgColorizers: theme ? buildModeBgColorizers(theme, modeColors) : null,
     borderSync,
     labelSync,
     offBorderColor: theme ? buildOffBorderColor(theme) : null,

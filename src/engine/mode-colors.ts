@@ -43,6 +43,29 @@ function colorizeWithTheme(
   return theme.fg(fallback, text);
 }
 
+// Background counterpart of buildModeColorizers, used for the prompt marker's
+// trailing space. Null when the theme has no usable bg() or a mode token
+// cannot paint a background.
+export function buildModeBgColorizers(
+  theme: ThemeLike,
+  colors: Required<ModeColorSettings>,
+): ModeColorizers | null {
+  if (typeof theme.bg !== "function") return null;
+  const themeBg = theme.bg.bind(theme);
+  const result = {} as ModeColorizers;
+  for (const mode of Object.keys(MODE_COLORS) as ModeColorKey[]) {
+    const configured = colors[mode].trim();
+    const token = TOKEN.test(configured) ? configured : MODE_COLORS[mode];
+    try {
+      themeBg(token, "");
+    } catch {
+      return null;
+    }
+    result[mode] = (s: string) => themeBg(token, s);
+  }
+  return result;
+}
+
 export function buildModeColorizers(
   theme: ThemeLike,
   colors: Required<ModeColorSettings>,

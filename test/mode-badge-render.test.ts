@@ -236,7 +236,7 @@ describe("prompt marker rendering", () => {
     editor.setText("hello");
     const rendered = editor.render(40);
 
-    assert.equal(stripTerminalSequences(rendered[1]).trimEnd(), " I hello");
+    assert.equal(stripTerminalSequences(rendered[1]).trimEnd(), " I  hello");
     assert.equal(stripTerminalSequences(rendered[0]), "─".repeat(40));
   });
 
@@ -246,7 +246,7 @@ describe("prompt marker rendering", () => {
     });
     editor.setText("hello world");
 
-    assert.equal(composerLine(editor, 6), " I hel");
+    assert.equal(composerLine(editor, 6), " I  he");
   });
 
   it("skips the marker when the width holds no text", () => {
@@ -265,7 +265,7 @@ describe("prompt marker rendering", () => {
     });
     editor.setText("hello");
 
-    assert.equal(composerLine(editor).trimEnd(), " I hello");
+    assert.equal(composerLine(editor).trimEnd(), " I  hello");
     assert.ok(footerLine(editor).startsWith(" INSERT "));
   });
 
@@ -282,7 +282,7 @@ describe("prompt marker rendering", () => {
       });
       editor.setText("x");
       sendKeys(editor, [...keys]);
-      assert.equal(composerLine(editor).slice(0, 3), " " + letter + " ");
+      assert.equal(composerLine(editor).slice(0, 4), " " + letter + "  ");
     });
   }
 });
