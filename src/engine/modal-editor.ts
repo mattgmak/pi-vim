@@ -5701,11 +5701,17 @@ export class ModalEditor extends CustomEditor {
       cancel();
       return false;
     }
-    this.leapState = {
-      pattern,
-      targets: assignLabels(findLeapMatches(buf.lines, this.cursorPos(), pattern)),
-      operator: state.operator,
-    };
+    const targets = assignLabels(
+      findLeapMatches(buf.lines, this.cursorPos(), pattern),
+    );
+    // One match jumps at once, like leap.nvim's jump_on_input default.
+    if (targets.length === 1) {
+      const only = targets[0]!;
+      this.leapState = null;
+      this.applyLeapTarget(only, state.operator);
+      return true;
+    }
+    this.leapState = { pattern, targets, operator: state.operator };
     return true;
   }
 
