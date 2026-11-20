@@ -2463,6 +2463,10 @@ export class ModalEditor extends CustomEditor {
         if ((data === "/" || data === "?") && this.openTranscriptSearch(data === "/" ? "forward" : "backward")) return;
       }
 
+      // An active Leap session owns the key first, so Visual cannot steal
+      // pattern letters such as `s`, `d`, or `y` from the pattern.
+      if (this.leapState && this.handleLeapKey(data, this.leapState.operator)) return;
+
       if (isVisualMode(this.mode) && this.handleVisualMode(data)) return;
 
       this.handleNormalMode(data);
@@ -5648,8 +5652,8 @@ export class ModalEditor extends CustomEditor {
     } else {
       lines[last] = label;
     }
-    this.applyPromptMarker(lines, width);
-    this.paintLeapLabels(lines, width);
+    const markerWidth = this.applyPromptMarker(lines, width);
+    this.paintLeapLabels(lines, width, markerWidth);
     return lines;
   }
 
@@ -5721,7 +5725,11 @@ export class ModalEditor extends CustomEditor {
   }
 
   /** Paint the Leap labels over the composer text they point at. */
-  private paintLeapLabels(lines: string[], width: number): void {
+  private paintLeapLabels(
+    lines: string[],
+    width: number,
+    markerWidth: number,
+  ): void {
     const state = this.leapState;
     if (!state || state.targets.length === 0 || lines.length < 3) return;
     const map = this.getRowMap();
@@ -5739,11 +5747,12 @@ export class ModalEditor extends CustomEditor {
       const index = row + 1;
       if (index >= lines.length - 1) continue;
       const entry = map[row]!;
+      // The prompt marker shifts the first text line right by its own width.
+      const offset = index === 1 ? markerWidth : 0;
+      const col = target.pos.col - entry.startCol + offset;
+      if (col < offset || col + 1 > width) continue;
       const list = byRow.get(index) ?? [];
-      list.push({
-        col: Math.min(target.pos.col - entry.startCol, entry.length),
-        label: target.label,
-      });
+      list.push({ col, label: target.label });
       byRow.set(index, list);
     }
     for (const [index, labels] of byRow) {
@@ -5759,18 +5768,19 @@ export class ModalEditor extends CustomEditor {
   }
 
   /** ` N ` plus a background-padded space, painted with the footer label's colors. */
-  private applyPromptMarker(lines: string[], width: number): void {
+  private applyPromptMarker(lines: string[], width: number): number {
     // The base render is [top border, ...text lines, bottom border], so the
     // first composer line sits at index 1.
-    if (!this.promptMarker || lines.length < 3) return;
+    if (!this.promptMarker || lines.length < 3) return 0;
     const raw = ` ${MODE_MARKER[this.mode]} `;
     const colorize = this.getModeLabelColorizer();
     const bg = this.getMarkerBgColorizer();
     const marker = colorize ? colorize(raw) : raw;
     const padding = bg ? bg(" ") : " ";
     const markerWidth = visibleWidth(raw) + 1;
-    if (markerWidth >= width) return;
+    if (markerWidth >= width) return 0;
     lines[1] = marker + padding + sliceByColumn(lines[1], 0, width - markerWidth);
+    return markerWidth;
   }
 
   // ---------------------------------------------------------------------------
