@@ -6,6 +6,7 @@
  */
 import type { ModalEditorOptions } from "./engine/modal-editor.js";
 import { isKeyRelease, matchesKey } from "@earendil-works/pi-tui";
+import { isCtrlBackspaceInput } from "./engine/input-keys.js";
 import { SuiteModalEditor } from "./suite-editor.js";
 
 /** Like Vim's 'timeoutlen': how long `Ctrl-X` waits for its second key. */
@@ -45,7 +46,7 @@ export class MainEditor extends SuiteModalEditor {
 
   private copyModeOpenFn: (() => boolean) | undefined;
 
-  /** Normal-mode Backspace: returns true when pi-copy's copy mode opened. */
+  /** Normal-mode Ctrl+Backspace: returns true when pi-copy's copy mode opened. */
   setCopyModeOpenFn(fn: (() => boolean) | undefined): void {
     this.copyModeOpenFn = fn;
   }
@@ -103,7 +104,7 @@ export class MainEditor extends SuiteModalEditor {
     }
     if (
       this.getModeContext().state === "normal" &&
-      matchesKey(data, "backspace") &&
+      isCtrlBackspaceInput(data) &&
       this.copyModeOpenFn?.()
     ) {
       return;

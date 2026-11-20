@@ -63,8 +63,8 @@ export function resolveSessionConfig(
 
   // Plugin behaviour pi-vim reproduces (vim-wordmotion, targets.vim,
   // surround.vim): on unless a setting turns it off.
-  const toggles = { wordMotion: true, targets: true, surround: true };
-  for (const key of ["wordMotion", "targets", "surround"] as const) {
+  const toggles = { wordMotion: true, targets: true, surround: true, leap: true };
+  for (const key of ["wordMotion", "targets", "surround", "leap"] as const) {
     const value = settings[key];
     if (value === undefined) continue;
     if (typeof value === "boolean") toggles[key] = value;

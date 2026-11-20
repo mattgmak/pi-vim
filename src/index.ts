@@ -190,7 +190,7 @@ export default function piVim(pi: ExtensionAPI) {
         pi.events.emit("copy-mode:open", request);
         return request.handled;
       });
-      // Normal-mode Backspace opens the same copy mode instead of deleting.
+      // Normal-mode Ctrl+Backspace opens the same copy mode; plain Backspace is Leap.
       editor.setCopyModeOpenFn(() => {
         const request = { handled: false };
         pi.events.emit("copy-mode:open", request);

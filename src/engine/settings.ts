@@ -42,6 +42,7 @@ export type PiVimSettings = {
   wordMotion?: unknown;
   targets?: unknown;
   surround?: unknown;
+  leap?: unknown;
   exCommand?: unknown;
   globalExCommand?: unknown;
   modeColors?: ModeColorSettings;
@@ -160,6 +161,7 @@ export function readPiVimToggle(
     | "wordMotion"
     | "targets"
     | "surround"
+    | "leap"
     | "changeWritesRegister"
     | "promptMarker",
 ) {
@@ -325,6 +327,7 @@ function disk(cwd: string): PiVimSettings {
     wordMotion: readPiVimToggle(g, p, "wordMotion"),
     targets: readPiVimToggle(g, p, "targets"),
     surround: readPiVimToggle(g, p, "surround"),
+    leap: readPiVimToggle(g, p, "leap"),
     exCommand: readPiVimExCommandSetting(g, p),
     globalExCommand: readPiVimGlobalExCommandSetting(g, p),
     modeColors: readPiVimModeColors(g, p),

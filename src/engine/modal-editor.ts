@@ -54,6 +54,14 @@ import {
   type ModeColorizers,
   type ModeColorKey,
 } from "./mode-colors.js";
+import {
+  assignLabels,
+  findLeapLabel,
+  findLeapMatches,
+  LEAP_TRIGGER_KEY,
+  type LeapTarget,
+  nextLeapPattern,
+} from "./leap.js";
 import { fitModeLabel } from "./mode-label.js";
 import {
   findCharMotionTarget,
@@ -499,6 +507,8 @@ export type ModalEditorOptions = {
   // surround.vim (ys, yss, yS, ds, cs, Visual S). Off by default in the
   // engine (Visual S stays Vim's linewise change).
   surround?: boolean;
+  // leap.nvim two-key jump on Backspace. Off by default in the engine.
+  leap?: boolean;
   // Columns per shift for >, < and surround indentation. Default 2.
   shiftWidth?: number;
   // Paints the Visual selection (normally the theme's `selectedBg`). Absent →
@@ -560,6 +570,9 @@ export class ModalEditor extends CustomEditor {
   private readonly wordMotion: boolean;
   private readonly targets: boolean;
   private readonly surround: boolean;
+  private readonly leap: boolean;
+  /** Live Leap session: the labels shown while it waits for a label key. */
+  private leapState: { pattern: string; targets: LeapTarget[]; operator: string | null } | null = null;
   private readonly shiftWidth: number;
   private readonly selectionColor: (s: string) => string;
   private readonly labelSide: LabelSide;
@@ -678,6 +691,7 @@ export class ModalEditor extends CustomEditor {
     this.wordMotion = opts?.wordMotion === true;
     this.targets = opts?.targets === true;
     this.surround = opts?.surround === true;
+    this.leap = opts?.leap === true;
     this.shiftWidth = Math.max(1, Math.floor(opts?.shiftWidth ?? 2));
     this.selectionColor = opts?.selectionColor ?? DEFAULT_SELECTION_COLOR;
     this.labelSide = opts?.labelSide ?? "right";
@@ -1777,6 +1791,7 @@ export class ModalEditor extends CustomEditor {
     this.pendingRegister = false;
     this.blackHoleRegister = false;
     this.pendingSurround = null;
+    this.leapState = null;
     this.clearPendingExCommand();
   }
 
@@ -2532,7 +2547,8 @@ export class ModalEditor extends CustomEditor {
       this.pendingRegister ||
       this.blackHoleRegister ||
       this.pendingS ||
-      this.pendingSurround
+      this.pendingSurround ||
+      this.leapState
     ) {
       this.clearPendingState();
       this.cancelRepeatableCommand();
@@ -3102,6 +3118,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingDelete(data: string): void {
+    if (this.handleLeapKey(data, "d")) return;
     if (this.opDigit(data)) return;
 
     if (data === "%") {
@@ -3209,6 +3226,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingChange(data: string): void {
+    if (this.handleLeapKey(data, "c")) return;
     this.runAsOperator("change", () => this.runPendingChange(data));
   }
 
@@ -3561,6 +3579,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handleNormalMode(data: string): void {
+    if (this.handleLeapKey(data, null)) return;
     if (this.pendingG) {
       if (isDigit(data)) {
         this.pendingGCount += data;
@@ -5045,6 +5064,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingYank(data: string): void {
+    if (this.handleLeapKey(data, "y")) return;
     if (this.opDigit(data)) return;
 
     if (data === "%") {
@@ -5629,7 +5649,113 @@ export class ModalEditor extends CustomEditor {
       lines[last] = label;
     }
     this.applyPromptMarker(lines, width);
+    this.paintLeapLabels(lines, width);
     return lines;
+  }
+
+  // --- leap -------------------------------------------------------------------
+
+  /**
+   * One key of a Leap session. True when Leap consumed it: the trigger, a
+   * label, a pattern extension, or Escape. Other keys cancel Leap and fall
+   * through to normal dispatch, so Enter still submits and `d` still deletes.
+   */
+  private handleLeapKey(data: string, operator: string | null): boolean {
+    if (!this.leap) return false;
+    const state = this.leapState;
+    if (!state) {
+      if (data !== LEAP_TRIGGER_KEY) return false;
+      this.leapState = { pattern: "", targets: [], operator };
+      return true;
+    }
+    const cancel = () => {
+      this.leapState = null;
+      if (state.operator) this.cancelPendingOperator(data);
+    };
+    const target = findLeapLabel(state.targets, data);
+    if (target) {
+      this.leapState = null;
+      this.applyLeapTarget(target, state.operator);
+      return true;
+    }
+    if (isEscapeLikeInput(data)) {
+      cancel();
+      return true;
+    }
+    if (!isPrintableInput(data)) {
+      cancel();
+      return false;
+    }
+    const buf = this.vimBuffer();
+    const pattern = nextLeapPattern(
+      state.pattern,
+      data,
+      buf.lines,
+      this.cursorPos(),
+    );
+    if (!pattern) {
+      cancel();
+      return false;
+    }
+    this.leapState = {
+      pattern,
+      targets: assignLabels(findLeapMatches(buf.lines, this.cursorPos(), pattern)),
+      operator: state.operator,
+    };
+    return true;
+  }
+
+  /** Jump to a label, or run the pending operator over [cursor, target]. */
+  private applyLeapTarget(target: LeapTarget, operator: string | null): void {
+    const pos: Pos = { line: target.pos.line, col: target.pos.col };
+    if (!operator) {
+      this.moveCursorToPos(pos, isVisualMode(this.mode));
+      return;
+    }
+    this.applyOperatorSpan(operator, {
+      start: this.cursorPos(),
+      end: pos,
+      inclusive: true,
+      linewise: false,
+    });
+  }
+
+  /** Paint the Leap labels over the composer text they point at. */
+  private paintLeapLabels(lines: string[], width: number): void {
+    const state = this.leapState;
+    if (!state || state.targets.length === 0 || lines.length < 3) return;
+    const map = this.getRowMap();
+    if (!map) return;
+    const colorize = this.getModeLabelColorizer();
+    const byRow = new Map<number, { col: number; label: string }[]>();
+    for (const target of state.targets) {
+      const row = map.findIndex(
+        (entry) =>
+          entry.logicalLine === target.pos.line &&
+          target.pos.col >= entry.startCol &&
+          target.pos.col <= entry.startCol + entry.length,
+      );
+      if (row < 0) continue;
+      const index = row + 1;
+      if (index >= lines.length - 1) continue;
+      const entry = map[row]!;
+      const list = byRow.get(index) ?? [];
+      list.push({
+        col: Math.min(target.pos.col - entry.startCol, entry.length),
+        label: target.label,
+      });
+      byRow.set(index, list);
+    }
+    for (const [index, labels] of byRow) {
+      let line = lines[index]!;
+      for (const item of [...labels].sort((a, b) => b.col - a.col)) {
+        line =
+          sliceByColumn(line, 0, item.col) +
+          (colorize ? colorize(item.label) : item.label) +
+          sliceByColumn(line, item.col + item.label.length, width);
+      }
+      lines[index] = line;
+    }
   }
 
   /** ` N ` plus a background-padded space, painted with the footer label's colors. */
@@ -5764,6 +5890,10 @@ export class ModalEditor extends CustomEditor {
   /** `g` commands added on top of upstream. True when consumed. */
   private handleExtendedGCommand(data: string): boolean {
     const visual = isVisualMode(this.mode);
+    if (data === "s" && this.leap && !this.leapState) {
+      this.leapState = { pattern: "", targets: [], operator: null };
+      return true;
+    }
     switch (data) {
       case "e":
       case "E": {
@@ -5913,8 +6043,13 @@ export class ModalEditor extends CustomEditor {
   }
 
   private handlePendingOpG(data: string): void {
-    this.pendingOpG = false;
     const op = this.pendingOperator;
+    if (op && data === "s" && this.leap && !this.leapState) {
+      this.pendingOpG = false;
+      this.leapState = { pattern: "", targets: [], operator: op };
+      return;
+    }
+    this.pendingOpG = false;
     if (!op) return;
     if (!isPrintableInput(data)) {
       this.cancelPendingOperator(data);
@@ -6819,6 +6954,8 @@ export class ModalEditor extends CustomEditor {
   }
 
   private getModeLabel(): string {
+    if (this.leapState)
+      return this.leapState.pattern ? ` LEAP ${this.leapState.pattern} ` : " LEAP ";
     if ("insert" === this.mode) return this.replaceSession ? " REPLACE " : " INSERT ";
     if (this.pendingExCommand !== null) return ` EX ${this.pendingExCommand}_ `;
     if (

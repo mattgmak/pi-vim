@@ -27,6 +27,15 @@ export function isBackspaceLikeInput(data: string): boolean {
   );
 }
 
+/** Ctrl+Backspace: `\x08` on most terminals, `ctrl+backspace` under Kitty. */
+export function isCtrlBackspaceInput(data: string): boolean {
+  return (
+    data === "\x08" ||
+    matchesKey(data, "ctrl+h") ||
+    matchesKey(data, "ctrl+backspace")
+  );
+}
+
 export function isPrintableChunk(data: string): boolean {
   if (data.length === 0) return false;
   for (const char of data) {
